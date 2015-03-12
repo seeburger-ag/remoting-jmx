@@ -114,15 +114,15 @@ import org.xnio.IoUtils;
  */
 class ServerProxy extends Common implements VersionedProxy {
 
-    private static final Logger log = Logger.getLogger(ServerProxy.class);
+    protected static final Logger log = Logger.getLogger(ServerProxy.class);
 
     private final Channel channel;
-    private final RemotingConnectorServer server;
-    private UUID connectionId;
-    private final Executor executor;
+    protected final RemotingConnectorServer server;
+    protected UUID connectionId;
+    protected final Executor executor;
     // Registry of handlers for the incoming messages.
-    private final Map<Byte, Common.MessageHandler> handlerRegistry;
-    private final RemoteNotificationManager remoteNotificationManager;
+    protected final Map<Byte, Common.MessageHandler> handlerRegistry;
+    protected final RemoteNotificationManager remoteNotificationManager;
 
     ServerProxy(final Channel channel, final RemotingConnectorServer server) {
         super(channel);
@@ -195,7 +195,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class MessageReciever implements Channel.Receiver {
+    protected class MessageReciever implements Channel.Receiver {
 
         @Override
         public void handleMessage(final Channel channel, MessageInputStream message) {
@@ -263,11 +263,13 @@ class ServerProxy extends Common implements VersionedProxy {
         public void handleError(Channel channel, IOException error) {
             log.warn("Channel closing due to error", error);
             remoteNotificationManager.removeNotificationListener();
+            server.connectionClosed(ServerProxy.this);
         }
 
         @Override
         public void handleEnd(Channel channel) {
             remoteNotificationManager.removeNotificationListener();
+            server.connectionClosed(ServerProxy.this);
         }
 
     }
@@ -275,11 +277,11 @@ class ServerProxy extends Common implements VersionedProxy {
     /**
      * Manager to maintain the list of remote notifications and to pass these notifications back to the clients.
      */
-    private class RemoteNotificationManager {
+    protected class RemoteNotificationManager {
 
         private Map<Integer, Association> listeners = new HashMap<Integer, Association>();
 
-        private synchronized void addNotificationListener(ObjectName name, int listenerId, NotificationFilter filter,
+        protected synchronized void addNotificationListener(ObjectName name, int listenerId, NotificationFilter filter,
                 Object handback) throws InstanceNotFoundException {
             NotificationProxy proxy = new NotificationProxy(listenerId);
             server.getMBeanServer().addNotificationListener(name, proxy, filter, handback);
@@ -291,7 +293,7 @@ class ServerProxy extends Common implements VersionedProxy {
             listeners.put(listenerId, association);
         }
 
-        private synchronized void removeNotificationListener() {
+        protected synchronized void removeNotificationListener() {
             Iterator<Integer> keys = listeners.keySet().iterator();
             int[] all = new int[listeners.size()];
             for (int i = 0; i < all.length; i++) {
@@ -312,7 +314,7 @@ class ServerProxy extends Common implements VersionedProxy {
             }
         }
 
-        private void removeNotificationListeners(int[] listenerIds) {
+        protected void removeNotificationListeners(int[] listenerIds) {
             for (int current : listenerIds) {
                 try {
                     removeNotificationListener(current);
@@ -325,9 +327,9 @@ class ServerProxy extends Common implements VersionedProxy {
         }
 
         private class NotificationProxy implements NotificationListener {
-            private final int listenerId;
+            protected final int listenerId;
 
-            private NotificationProxy(final int listenerId) {
+            protected NotificationProxy(final int listenerId) {
                 this.listenerId = listenerId;
             }
 
@@ -350,16 +352,16 @@ class ServerProxy extends Common implements VersionedProxy {
             }
         }
 
-        private class Association {
-            private ObjectName name;
-            private NotificationListener listener;
-            private NotificationFilter filter;
-            private Object handback;
+        protected class Association {
+            protected ObjectName name;
+            protected NotificationListener listener;
+            protected NotificationFilter filter;
+            protected Object handback;
         }
 
     }
 
-    private void writeResponse(final byte inResponseTo, final int correlationId) throws IOException {
+    protected void writeResponse(final byte inResponseTo, final int correlationId) throws IOException {
         write(new MessageWriter() {
 
             @Override
@@ -372,7 +374,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private void writeResponse(final Exception e, final byte inResponseTo, final int correlationId) throws IOException {
+    protected void writeResponse(final Exception e, final byte inResponseTo, final int correlationId) throws IOException {
         write(new MessageWriter() {
 
             @Override
@@ -390,7 +392,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private void writeResponse(final boolean response, final byte inResponseTo, final int correlationId) throws IOException {
+    protected void writeResponse(final boolean response, final byte inResponseTo, final int correlationId) throws IOException {
         write(new MessageWriter() {
 
             @Override
@@ -405,7 +407,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private void writeResponse(final Integer response, final byte inResponseTo, final int correlationId) throws IOException {
+    protected void writeResponse(final Integer response, final byte inResponseTo, final int correlationId) throws IOException {
         write(new MessageWriter() {
 
             @Override
@@ -420,7 +422,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private void writeResponse(final Object response, final byte type, final byte inResponseTo, final int correlationId)
+    protected void writeResponse(final Object response, final byte type, final byte inResponseTo, final int correlationId)
             throws IOException {
         write(new MessageWriter() {
 
@@ -439,7 +441,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private void writeResponse(final String response, final byte inResponseTo, final int correlationId) throws IOException {
+    protected void writeResponse(final String response, final byte inResponseTo, final int correlationId) throws IOException {
         write(new MessageWriter() {
 
             @Override
@@ -454,7 +456,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private void writeResponse(final String[] response, final byte inResponseTo, final int correlationId) throws IOException {
+    protected void writeResponse(final String[] response, final byte inResponseTo, final int correlationId) throws IOException {
         write(new MessageWriter() {
 
             @Override
@@ -472,7 +474,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private void writeNotification(final int listenerId, final Notification notification, final Object handback)
+    protected void writeNotification(final int listenerId, final Notification notification, final Object handback)
             throws IOException {
         write(new MessageWriter() {
 
@@ -498,7 +500,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private class AddNotificationListenerHandler implements Common.MessageHandler {
+    protected class AddNotificationListenerHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -563,7 +565,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class CreateMBeanHandler implements Common.MessageHandler {
+    protected class CreateMBeanHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, final int correlationId) throws IOException {
@@ -681,7 +683,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private void switchClassLoaderForMBean(final ObjectName name, final ClassLoaderSwitchingClassResolver resolver) {
+    protected void switchClassLoaderForMBean(final ObjectName name, final ClassLoaderSwitchingClassResolver resolver) {
         try {
             resolver.switchClassLoader(server.getMBeanServer().getClassLoaderFor(name));
         } catch (InstanceNotFoundException e) {
@@ -689,7 +691,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private void switchClassLoaderForLoader(final ObjectName name, final ClassLoaderSwitchingClassResolver resolver) {
+    protected void switchClassLoaderForLoader(final ObjectName name, final ClassLoaderSwitchingClassResolver resolver) {
         try {
             resolver.switchClassLoader(server.getMBeanServer().getClassLoader(name));
         } catch (InstanceNotFoundException e) {
@@ -697,7 +699,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class GetDefaultDomainHandler implements Common.MessageHandler {
+    protected class GetDefaultDomainHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, final int correlationId) throws IOException {
@@ -711,7 +713,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class GetDomainsHandler implements Common.MessageHandler {
+    protected class GetDomainsHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, final int correlationId) throws IOException {
@@ -726,7 +728,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private class GetMBeanCountHandler implements Common.MessageHandler {
+    protected class GetMBeanCountHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, final int correlationId) throws IOException {
@@ -741,7 +743,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private class GetAttributeHandler implements Common.MessageHandler {
+    protected class GetAttributeHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, final int correlationId) throws IOException {
@@ -789,7 +791,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class GetAttributesHandler implements Common.MessageHandler {
+    protected class GetAttributesHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -836,7 +838,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class GetMBeanInfoHandler implements Common.MessageHandler {
+    protected class GetMBeanInfoHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -876,7 +878,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private class GetObjectInstanceHandler implements Common.MessageHandler {
+    protected class GetObjectInstanceHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -910,7 +912,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private class InstanceofHandler implements Common.MessageHandler {
+    protected class InstanceofHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -950,7 +952,7 @@ class ServerProxy extends Common implements VersionedProxy {
 
     }
 
-    private class IsRegisteredHandler implements Common.MessageHandler {
+    protected class IsRegisteredHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -977,7 +979,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class InvokeHandler implements Common.MessageHandler {
+    protected class InvokeHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -1047,7 +1049,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class RemoveNotificationListenerHandler implements Common.MessageHandler {
+    protected class RemoveNotificationListenerHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -1133,7 +1135,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class QueryMBeansHandler implements Common.MessageHandler {
+    protected class QueryMBeansHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -1166,7 +1168,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class QueryNamesHandler implements Common.MessageHandler {
+    protected class QueryNamesHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -1200,7 +1202,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class SetAttributeHandler implements Common.MessageHandler {
+    protected class SetAttributeHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -1253,7 +1255,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class SetAttributesHandler implements Common.MessageHandler {
+    protected class SetAttributesHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -1299,7 +1301,7 @@ class ServerProxy extends Common implements VersionedProxy {
         }
     }
 
-    private class UnregisterMBeanHandler implements Common.MessageHandler {
+    protected class UnregisterMBeanHandler implements Common.MessageHandler {
 
         @Override
         public void handle(DataInput input, int correlationId) throws IOException {
@@ -1339,7 +1341,7 @@ class ServerProxy extends Common implements VersionedProxy {
     /**
      * A mutable {@link org.jboss.marshalling.ClassResolver}
      */
-    private class ClassLoaderSwitchingClassResolver extends AbstractClassResolver {
+    protected class ClassLoaderSwitchingClassResolver extends AbstractClassResolver {
 
         private ClassLoader currentClassLoader;
 

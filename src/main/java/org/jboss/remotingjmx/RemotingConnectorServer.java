@@ -57,7 +57,7 @@ import org.xnio.OptionMap;
  */
 public class RemotingConnectorServer extends JMXConnectorServer {
 
-    private static final Logger log = Logger.getLogger(RemotingConnectorServer.class);
+    protected static final Logger log = Logger.getLogger(RemotingConnectorServer.class);
 
     // TODO - We may need this to be configurable to expose multiple MBeanServers
     // TODO - Either that or selection of MBean server is on marshalled message but not sure if that is correct.
@@ -149,6 +149,12 @@ public class RemotingConnectorServer extends JMXConnectorServer {
         connectionOpened(connectionId, "", null);
     }
 
+    public void connectionClosed(VersionedProxy proxy) {
+        String connectionId = proxy.getConnectionId();
+        log.debugf("Connection '%s' now closed.", connectionId);
+        RemotingConnectorServer.this.connectionClosed(connectionId, "", null);
+    }
+
     public Executor getExecutor() {
         return executor;
     }
@@ -166,7 +172,7 @@ public class RemotingConnectorServer extends JMXConnectorServer {
      * @param channel
      * @throws IOException
      */
-    private void writeHeader(final Channel channel) throws IOException {
+    protected void writeHeader(final Channel channel) throws IOException {
         CancellableDataOutputStream dos = new CancellableDataOutputStream(channel.writeMessage());
         try {
             dos.writeBytes("JMX");
@@ -193,7 +199,7 @@ public class RemotingConnectorServer extends JMXConnectorServer {
     /**
      * The listener to handle the opening of the channel from remote clients.
      */
-    private class ChannelOpenListener implements OpenListener {
+    protected class ChannelOpenListener implements OpenListener {
 
         public void channelOpened(Channel channel) {
             log.trace("Channel Opened");
@@ -213,7 +219,7 @@ public class RemotingConnectorServer extends JMXConnectorServer {
         }
     }
 
-    private class ClientVersionReceiver implements Channel.Receiver {
+    protected class ClientVersionReceiver implements Channel.Receiver {
 
         public void handleMessage(Channel channel, MessageInputStream messageInputStream) {
             // The incoming message will be in the form [JMX {selected version}], once verified

@@ -200,6 +200,12 @@ public class JMXRemotingServer {
             endpoint.close();
         }
 
+        if (connectorServer != null) {
+            String[] ids = connectorServer.getConnectionIds();
+            if (ids.length > 0) {
+                throw new RuntimeException("Connections still registered with server despite being stopped.");
+            }
+        }
     }
 
     public static void main(String[] args) throws IOException {
@@ -231,7 +237,7 @@ public class JMXRemotingServer {
         }
     }
 
-    private class DefaultAuthenticationProvider implements ServerAuthenticationProvider {
+    protected class DefaultAuthenticationProvider implements ServerAuthenticationProvider {
 
         @Override
         public AuthorizingCallbackHandler getCallbackHandler(String mechanismName) {
@@ -323,7 +329,7 @@ public class JMXRemotingServer {
 
     }
 
-    private static UserInfo createUserInfo(final Collection<Principal> users) {
+    protected static UserInfo createUserInfo(final Collection<Principal> users) {
         return new UserInfo() {
 
             public String getUserName() {
