@@ -21,6 +21,7 @@
  */
 package org.jboss.remotingjmx;
 
+
 import static org.jboss.remotingjmx.Constants.CHANNEL_NAME;
 import static org.jboss.remotingjmx.Constants.CONNECTION_PROVIDER_URI;
 import static org.jboss.remotingjmx.Util.convert;
@@ -63,15 +64,19 @@ import org.xnio.Property;
 import org.xnio.Sequence;
 import org.xnio.Xnio;
 
+
 /**
  * @author <a href="mailto:darran.lofthouse@jboss.com">Darran Lofthouse</a>
  */
-class RemotingConnector implements JMXConnector {
+class RemotingConnector implements JMXConnector
+{
 
     private static final Logger log = Logger.getLogger(RemotingConnectorServer.class);
 
+    private static final long CONNECT_TIMEOUT = Long.getLong("remote.jmx.connect.timeout", 15);
+
     private final JMXServiceURL serviceUrl;
-    private final Map<String, ?> environment;
+    private final Map<String, ? > environment;
 
     private Endpoint endpoint;
     private Connection connection;
@@ -80,35 +85,52 @@ class RemotingConnector implements JMXConnector {
     private VersionedConnection versionedConnection;
     private ShutDownHook shutDownHook;
 
-    RemotingConnector(JMXServiceURL serviceURL, Map<String, ?> environment) throws IOException {
+
+    RemotingConnector(JMXServiceURL serviceURL, Map<String, ? > environment) throws IOException
+    {
         this.serviceUrl = serviceURL;
         this.environment = Collections.unmodifiableMap(environment);
     }
 
-    public void connect() throws IOException {
+
+    public void connect() throws IOException
+    {
         connect(null);
     }
 
-    public void connect(Map<String, ?> env) throws IOException {
-        try {
+
+    public void connect(Map<String, ? > env) throws IOException
+    {
+        try
+        {
             internalConnect(env);
-        } catch (Exception e) {
+        }
+        catch (Exception e)
+        {
             close();
-            if (e instanceof RuntimeException) {
-                throw (RuntimeException) e;
-            } else if (e instanceof IOException) {
-                throw (IOException) e;
-            } else {
+            if (e instanceof RuntimeException)
+            {
+                throw (RuntimeException)e;
+            }
+            else if (e instanceof IOException)
+            {
+                throw (IOException)e;
+            }
+            else
+            {
                 // Added for completeness but this line should not be reachable.
                 throw new IOException(e);
             }
         }
     }
 
-    private void internalConnect(Map<String, ?> env) throws IOException {
+
+    private void internalConnect(Map<String, ? > env) throws IOException
+    {
         // Once closed a connector is not allowed to connect again.
         // NB If a connect call fails clients are permitted to try the call again.
-        if (closed) {
+        if (closed)
+        {
             throw new IOException("Connector already closed.");
         }
 
@@ -116,13 +138,17 @@ class RemotingConnector implements JMXConnector {
         endpoint = Remoting.createEndpoint("endpoint", xnio, OptionMap.create(Options.THREAD_DAEMON, true));
         endpoint.addConnectionProvider(CONNECTION_PROVIDER_URI, new RemoteConnectionProviderFactory(), OptionMap.EMPTY);
 
-        if (log.isTraceEnabled()) {
+        if (log.isTraceEnabled())
+        {
             StringBuffer sb = new StringBuffer("connect(");
-            if (env != null) {
-                for (String key : env.keySet()) {
+            if (env != null)
+            {
+                for (String key : env.keySet())
+                {
                     Object current = env.get(key);
-                    if (current instanceof String[]) {
-                        String[] temp = (String[]) current;
+                    if (current instanceof String[])
+                    {
+                        String[] temp = (String[])current;
                         StringBuffer sb2 = new StringBuffer();
                         sb2.append("[username=").append(temp[0]).append(",password=").append(temp[1]).append("]");
                         current = sb2;
@@ -130,7 +156,9 @@ class RemotingConnector implements JMXConnector {
 
                     sb.append("{").append(key).append(",").append(String.valueOf(current)).append("}");
                 }
-            } else {
+            }
+            else
+            {
                 sb.append("null");
             }
             sb.append(")");
@@ -138,51 +166,69 @@ class RemotingConnector implements JMXConnector {
         }
 
         Map<String, Object> combinedEnvironment = new HashMap<String, Object>(environment);
-        if (env != null) {
-            for (String key : env.keySet()) {
+        if (env != null)
+        {
+            for (String key : env.keySet())
+            {
                 combinedEnvironment.put(key, env.get(key));
             }
         }
 
         // The credentials.
         CallbackHandler handler = null;
-        if (env != null) {
-            handler = (CallbackHandler) env.get(CallbackHandler.class.getName());
-            if (handler == null && env.containsKey(CREDENTIALS)) {
-                handler = new UsernamePasswordCallbackHandler((String[]) env.get(CREDENTIALS));
+        if (env != null)
+        {
+            handler = (CallbackHandler)env.get(CallbackHandler.class.getName());
+            if (handler == null && env.containsKey(CREDENTIALS))
+            {
+                handler = new UsernamePasswordCallbackHandler((String[])env.get(CREDENTIALS));
             }
         }
-        if (handler == null) {
+        if (handler == null)
+        {
             handler = new AnonymousCallbackHandler();
         }
 
         // open a connection
         final IoFuture<Connection> futureConnection = endpoint.connect(convert(serviceUrl), getOptionMap(), handler);
-        IoFuture.Status result = futureConnection.await(5, TimeUnit.SECONDS);
+        IoFuture.Status result = futureConnection.await(CONNECT_TIMEOUT, TimeUnit.SECONDS);
 
-        if (result == IoFuture.Status.DONE) {
+        if (result == IoFuture.Status.DONE)
+        {
             connection = futureConnection.get();
-        } else if (result == IoFuture.Status.FAILED) {
+        }
+        else if (result == IoFuture.Status.FAILED)
+        {
             throw futureConnection.getException();
-        } else {
+        }
+        else
+        {
             throw new RuntimeException("Operation failed with status " + result);
         }
 
         String serviceName = serviceUrl.getURLPath();
-        if (serviceName.length() == 0) {
+        if (serviceName.length() == 0)
+        {
             serviceName = CHANNEL_NAME;
-        } else if (serviceName.startsWith("/") || serviceName.startsWith(";")) {
+        }
+        else if (serviceName.startsWith("/") || serviceName.startsWith(";"))
+        {
             serviceName = serviceName.substring(1);
         }
 
         // Now open the channel
         final IoFuture<Channel> futureChannel = connection.openChannel(serviceName, OptionMap.EMPTY);
         result = futureChannel.await(5, TimeUnit.SECONDS);
-        if (result == IoFuture.Status.DONE) {
+        if (result == IoFuture.Status.DONE)
+        {
             channel = futureChannel.get();
-        } else if (result == IoFuture.Status.FAILED) {
+        }
+        else if (result == IoFuture.Status.FAILED)
+        {
             throw new IOException(futureChannel.getException());
-        } else {
+        }
+        else
+        {
             throw new RuntimeException("Operation failed with status " + result);
         }
 
@@ -191,7 +237,9 @@ class RemotingConnector implements JMXConnector {
         Runtime.getRuntime().addShutdownHook((shutDownHook = new ShutDownHook()));
     }
 
-    private OptionMap getOptionMap() {
+
+    private OptionMap getOptionMap()
+    {
         OptionMap.Builder builder = OptionMap.builder();
         builder.set(SASL_POLICY_NOANONYMOUS, Boolean.FALSE);
         builder.set(SASL_POLICY_NOPLAINTEXT, Boolean.FALSE);
@@ -206,33 +254,45 @@ class RemotingConnector implements JMXConnector {
         return builder.getMap();
     }
 
-    private void verifyConnected() throws IOException {
-        if (closed) {
+
+    private void verifyConnected() throws IOException
+    {
+        if (closed)
+        {
             throw new IOException("Connector already closed.");
-        } else if (versionedConnection == null) {
+        }
+        else if (versionedConnection == null)
+        {
             throw new IOException("Connector not connected.");
         }
     }
 
-    public MBeanServerConnection getMBeanServerConnection() throws IOException {
+
+    public MBeanServerConnection getMBeanServerConnection() throws IOException
+    {
         log.trace("getMBeanServerConnection()");
 
         return getMBeanServerConnection(null);
     }
 
-    public MBeanServerConnection getMBeanServerConnection(Subject delegationSubject) throws IOException {
+
+    public MBeanServerConnection getMBeanServerConnection(Subject delegationSubject) throws IOException
+    {
         log.trace("getMBeanServerConnection(Subject)");
         verifyConnected();
 
         return versionedConnection.getMBeanServerConnection(delegationSubject);
     }
 
-    public void close() throws IOException {
+
+    public void close() throws IOException
+    {
         log.trace("close()");
         closed = true;
 
         final ShutDownHook shutDownHook;
-        if ((shutDownHook = this.shutDownHook) != null) {
+        if ((shutDownHook = this.shutDownHook) != null)
+        {
             Runtime.getRuntime().removeShutdownHook(shutDownHook);
             this.shutDownHook = null;
         }
@@ -243,39 +303,56 @@ class RemotingConnector implements JMXConnector {
         safeClose(endpoint);
     }
 
-    private void safeClose(final Channel channel) {
-        if (channel != null) {
-            try {
+
+    private void safeClose(final Channel channel)
+    {
+        if (channel != null)
+        {
+            try
+            {
                 channel.writeShutdown();
-            } catch (Exception ignored) {
             }
+            catch (Exception ignored)
+            {}
         }
-        safeClose((Closeable) channel);
+        safeClose((Closeable)channel);
     }
 
-    private void safeClose(final Closeable closeable) {
-        if (closeable != null) {
-            try {
+
+    private void safeClose(final Closeable closeable)
+    {
+        if (closeable != null)
+        {
+            try
+            {
                 closeable.close();
-            } catch (Exception ignored) {
             }
+            catch (Exception ignored)
+            {}
         }
     }
 
-    public void addConnectionNotificationListener(NotificationListener listener, NotificationFilter filter, Object handback) {
+
+    public void addConnectionNotificationListener(NotificationListener listener, NotificationFilter filter, Object handback)
+    {
         log.trace("addConnectionNotificationListener()");
     }
 
-    public void removeConnectionNotificationListener(NotificationListener listener) throws ListenerNotFoundException {
+
+    public void removeConnectionNotificationListener(NotificationListener listener) throws ListenerNotFoundException
+    {
         log.trace("removeConnectionNotificationListener()");
     }
 
-    public void removeConnectionNotificationListener(NotificationListener l, NotificationFilter f, Object handback)
-            throws ListenerNotFoundException {
+
+    public void removeConnectionNotificationListener(NotificationListener l, NotificationFilter f, Object handback) throws ListenerNotFoundException
+    {
         log.trace("removeConnectionNotificationListener()");
     }
 
-    public String getConnectionId() throws IOException {
+
+    public String getConnectionId() throws IOException
+    {
         log.trace("getConnectionId()");
         verifyConnected();
 
@@ -289,14 +366,20 @@ class RemotingConnector implements JMXConnector {
      * The inner classes for use by the RemotingConnector.
      */
 
-    private class AnonymousCallbackHandler implements CallbackHandler {
+    private class AnonymousCallbackHandler implements CallbackHandler
+    {
 
-        public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
-            for (Callback current : callbacks) {
-                if (current instanceof NameCallback) {
-                    NameCallback ncb = (NameCallback) current;
+        public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException
+        {
+            for (Callback current : callbacks)
+            {
+                if (current instanceof NameCallback)
+                {
+                    NameCallback ncb = (NameCallback)current;
                     ncb.setName("anonymous");
-                } else {
+                }
+                else
+                {
                     throw new UnsupportedCallbackException(current);
                 }
             }
@@ -304,27 +387,40 @@ class RemotingConnector implements JMXConnector {
 
     }
 
-    private class UsernamePasswordCallbackHandler implements CallbackHandler {
+    private class UsernamePasswordCallbackHandler implements CallbackHandler
+    {
 
         private final String[] credentials;
 
-        private UsernamePasswordCallbackHandler(String[] credentials) {
+
+        private UsernamePasswordCallbackHandler(String[] credentials)
+        {
             this.credentials = credentials;
         }
 
+
         @Override
-        public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
-            for (Callback current : callbacks) {
-                if (current instanceof NameCallback) {
-                    NameCallback ncb = (NameCallback) current;
+        public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException
+        {
+            for (Callback current : callbacks)
+            {
+                if (current instanceof NameCallback)
+                {
+                    NameCallback ncb = (NameCallback)current;
                     ncb.setName(credentials[0]);
-                } else if (current instanceof PasswordCallback) {
-                    PasswordCallback pcb = (PasswordCallback) current;
+                }
+                else if (current instanceof PasswordCallback)
+                {
+                    PasswordCallback pcb = (PasswordCallback)current;
                     pcb.setPassword(credentials[1].toCharArray());
-                } else if (current instanceof RealmCallback) {
-                    RealmCallback realmCallback = (RealmCallback) current;
+                }
+                else if (current instanceof RealmCallback)
+                {
+                    RealmCallback realmCallback = (RealmCallback)current;
                     realmCallback.setText(realmCallback.getDefaultText());
-                } else {
+                }
+                else
+                {
                     throw new UnsupportedCallbackException(current);
                 }
             }
@@ -333,17 +429,24 @@ class RemotingConnector implements JMXConnector {
 
     }
 
-    private class ShutDownHook extends Thread {
-        private ShutDownHook() {
-            super(new Runnable() {
+    private class ShutDownHook extends Thread
+    {
+        private ShutDownHook()
+        {
+            super(new Runnable()
+            {
 
-                public void run() {
-                    if (closed == false) {
-                        try {
+                public void run()
+                {
+                    if (closed == false)
+                    {
+                        try
+                        {
                             shutDownHook = null;
                             close();
-                        } catch (IOException ignored) {
                         }
+                        catch (IOException ignored)
+                        {}
                     }
                 }
             });
